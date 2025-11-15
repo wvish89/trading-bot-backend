@@ -70,13 +70,17 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Start server with database connection test
-const { testConnection } = require('./config/database');
+// Start server with database initialization
+const { initDatabase } = require('./config/initDatabase');
 
 async function startServer() {
-  // Test database connection
+  // Initialize database tables
   if (process.env.DATABASE_URL) {
-    await testConnection();
+    try {
+      await initDatabase();
+    } catch (error) {
+      console.error('⚠️  Database initialization failed, but server will continue');
+    }
   } else {
     console.log('⚠️  No DATABASE_URL found - database features disabled');
   }
