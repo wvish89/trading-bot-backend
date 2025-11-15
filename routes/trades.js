@@ -3,6 +3,10 @@ const router = express.Router();
 const { query } = require('../config/database');
 const BinanceAPI = require('../services/binanceAPI');
 
+function canTradeLive() {
+  return !!(process.env.BINANCE_API_KEY && process.env.BINANCE_SECRET && binance);
+}
+
 // Initialize Binance API (only if keys are provided)
 let binance = null;
 if (process.env.BINANCE_API_KEY && process.env.BINANCE_SECRET) {
@@ -90,6 +94,70 @@ router.post('/', async (req, res) => {
         error: 'Missing required fields: symbol, trade_type, price, quantity' 
       });
     }
+
+    // 🔥 NEW: Check if live trading is possible
+    if (mode === 'live' && !canTradeLive()) {
+      return res.status(400).json({
+        success: false,
+        error: 'Live trading not available. Binance API credentials not configured.',
+        hint: 'Please add BINANCE_API_KEY and BINANCE_SECRET to environment variables'
+      });
+    }
+    
+    const total_value = price * quantity;
+    let orderResult = null;
+    
+    // Execute real trade on Binance if in live mode
+    if (mode === 'live' && binance) {
+      try {
+        // Convert symbol format: BTC/USD -> BTCUSDT
+        const binanceSymbol = symbol.replace('/', '').toUpperCase();
+        
+        console.log(`🔴 LIVE TRADE: ${trade_type} ${quantity} ${binanceSymbol} @ $${price}`);
+        
+        orderResult = await binance.placeOrder(
+          binanceSymbol,
+          trade_type.toUpperCase(),
+          quantity
+        );
+        
+        console.log('✅ Binance order executed:', orderResult);
+      } catch (binanceError) {
+        console.error('❌ Binance order failed:', binanceError);
+        return res.status(500).json({
+          success: false,
+          error: 'Failed to execute trade on Binance',
+          details: binanceError.message
+        });
+      }
+    } else if (mode === 'paper') {
+      console.log(`📄 PAPER TRADE: ${trade_type} ${quantity} ${symbol} @ $${price}`);
+    }
+    
+    // Save trade to database
+    const result = await query(
+      `INSERT INTO trades 
+       (symbol, trade_type, price, quantity, total_value, confidence, strategy)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) 
+       RETURNING *`,
+      [symbol, trade_type, price, quantity, total_value, confidence, strategy]
+    );
+    
+    res.status(201).json({ 
+      success: true, 
+      trade: result.rows[0],
+      binanceOrder: orderResult,
+      mode: mode
+    });
+    
+  } catch (error) {
+    console.error('Error creating trade:', error);
+    res.status(500).json({ 
+      success: false,
+      error: error.message 
+    });
+  }
+});
     
     const total_value = price * quantity;
     let orderResult = null;
@@ -222,5 +290,6 @@ router.get('/price/:symbol', async (req, res) => {
     });
   }
 });
+
 
 module.exports = router;
