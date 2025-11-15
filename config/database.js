@@ -11,6 +11,25 @@ const pool = new Pool({
   connectionTimeoutMillis: 2000,
 });
 
+// Test database connection
+async function testConnection() {
+  try {
+    const result = await query('SELECT NOW()');
+    console.log('✅ Database connection successful');
+    return true;
+  } catch (error) {
+    console.error('❌ Database connection failed:', error.message);
+    return false;
+  }
+}
+
+module.exports = {
+  query,
+  pool,
+  getClient,
+  testConnection
+};
+
 // Test connection on startup
 pool.on('connect', () => {
   console.log('✅ Database connected successfully');
@@ -65,4 +84,5 @@ module.exports = {
   query,
   pool,
   getClient
+
 };
