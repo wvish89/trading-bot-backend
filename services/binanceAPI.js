@@ -1,10 +1,14 @@
 const crypto = require('crypto');
 
 class BinanceAPI {
-  constructor(apiKey, apiSecret) {
+  constructor(apiKey, apiSecret, testnet = false) {
     this.apiKey = apiKey;
     this.apiSecret = apiSecret;
-    this.baseURL = 'https://api.binance.com';
+    this.baseURL = testnet 
+      ? 'https://testnet.binance.vision' 
+      : 'https://api.binance.com';
+    
+    console.log(`🔗 Binance API initialized (${testnet ? 'TESTNET' : 'LIVE'})`);
   }
 
   // Generate HMAC SHA256 signature
@@ -186,5 +190,6 @@ class BinanceAPI {
     }
   }
 }
+
 
 module.exports = BinanceAPI;
