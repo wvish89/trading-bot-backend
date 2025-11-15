@@ -70,35 +70,13 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Start server with database initialization
-const { initDatabase } = require('./config/initDatabase');
-
-async function startServer() {
-  // Initialize database tables
-  if (process.env.DATABASE_URL) {
-    try {
-      await initDatabase();
-    } catch (error) {
-      console.error('⚠️  Database initialization failed, but server will continue');
-    }
-  } else {
-    console.log('⚠️  No DATABASE_URL found - database features disabled');
-  }
-  
-  // Start listening
-  app.listen(PORT, () => {
-    console.log(`✅ Server running on port ${PORT}`);
-    console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
-    console.log(`📊 API URL: http://localhost:${PORT}`);
-    console.log(`💾 Database: ${process.env.DATABASE_URL ? 'Connected ✅' : 'NOT CONFIGURED ⚠️'}`);
-    console.log(`🔑 Binance: ${process.env.BINANCE_API_KEY ? 'Configured ✅' : 'NOT CONFIGURED (Paper trading only) 📄'}`);
-  });
-}
-
-// Start the server
-startServer().catch(err => {
-  console.error('Failed to start server:', err);
-  process.exit(1);
+// Start server
+app.listen(PORT, () => {
+  console.log(`✅ Server running on port ${PORT}`);
+  console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`📊 API URL: http://localhost:${PORT}`);
+  console.log(`💾 Database: ${process.env.DATABASE_URL ? 'Connected ✅' : 'NOT CONFIGURED ⚠️'}`);
+  console.log(`🔑 Binance: ${process.env.BINANCE_API_KEY ? 'Configured ✅' : 'NOT CONFIGURED (Paper trading only) 📄'}`);
 });
 
 module.exports = app;
