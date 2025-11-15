@@ -267,29 +267,33 @@ router.get('/price/:symbol', async (req, res) => {
     if (!binance) {
       return res.status(503).json({
         success: false,
-        error: 'Binance API not configured'
+        error: 'Binance API not configured. Using simulated prices.'
       });
     }
     
     const { symbol } = req.params;
-    // Convert symbol format: BTC/USD -> BTCUSDT
-    const binanceSymbol = symbol.replace('/', '') + 'T';
+    // Convert symbol format: BTCUSDT or BTC/USD -> BTCUSDT
+    const binanceSymbol = symbol.replace('/', '').toUpperCase();
     
     const price = await binance.getPrice(binanceSymbol);
     
     res.json({
       success: true,
       symbol: symbol,
+      binanceSymbol: binanceSymbol,
       price: parseFloat(price.price),
       timestamp: new Date().toISOString()
     });
   } catch (error) {
+    console.error('Error getting price:', error);
     res.status(500).json({
       success: false,
-      error: error.message
+      error: error.message,
+      hint: 'Make sure the symbol is valid (e.g., BTCUSDT)'
     });
   }
 });
 
 
 module.exports = router;
+
