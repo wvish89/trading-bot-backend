@@ -5,8 +5,17 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 10000;
 
-// Middleware
-app.use(cors());
+// 🔥 UPDATED CORS - Allow Claude.ai and all origins for now
+app.use(cors({
+  origin: '*', // Allow all origins (including Claude.ai)
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: false
+}));
+
+// Handle preflight requests
+app.options('*', cors());
+
 app.use(express.json());
 
 // Import routes
