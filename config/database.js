@@ -11,25 +11,6 @@ const pool = new Pool({
   connectionTimeoutMillis: 2000,
 });
 
-// Test database connection
-async function testConnection() {
-  try {
-    const result = await query('SELECT NOW()');
-    console.log('✅ Database connection successful');
-    return true;
-  } catch (error) {
-    console.error('❌ Database connection failed:', error.message);
-    return false;
-  }
-}
-
-module.exports = {
-  query,
-  pool,
-  getClient,
-  testConnection
-};
-
 // Test connection on startup
 pool.on('connect', () => {
   console.log('✅ Database connected successfully');
@@ -45,7 +26,7 @@ async function query(text, params) {
   try {
     const res = await pool.query(text, params);
     const duration = Date.now() - start;
-    console.log('Executed query', { text, duration, rows: res.rowCount });
+    console.log('Executed query', { text: text.substring(0, 50), duration, rows: res.rowCount });
     return res;
   } catch (error) {
     console.error('Database query error:', error);
@@ -56,33 +37,43 @@ async function query(text, params) {
 // Helper to get a client from pool
 async function getClient() {
   const client = await pool.connect();
-  const query = client.query;
-  const release = client.release;
+  const originalQuery = client.query;
+  const originalRelease = client.release;
   
-  // Set a timeout of 5 seconds, after which we will log this client's last query
   const timeout = setTimeout(() => {
     console.error('A client has been checked out for more than 5 seconds!');
   }, 5000);
   
-  // Monkey patch the query method to keep track of the last query executed
   client.query = (...args) => {
     client.lastQuery = args;
-    return query.apply(client, args);
+    return originalQuery.apply(client, args);
   };
   
   client.release = () => {
     clearTimeout(timeout);
-    client.query = query;
-    client.release = release;
-    return release.apply(client);
+    client.query = originalQuery;
+    client.release = originalRelease;
+    return originalRelease.apply(client);
   };
   
   return client;
 }
 
+// Test database connection
+async function testConnection() {
+  try {
+    const result = await pool.query('SELECT NOW()');
+    console.log('✅ Database connection test successful at', result.rows[0].now);
+    return true;
+  } catch (error) {
+    console.error('❌ Database connection test failed:', error.message);
+    return false;
+  }
+}
+
 module.exports = {
   query,
   pool,
-  getClient
-
+  getClient,
+  testConnection
 };
