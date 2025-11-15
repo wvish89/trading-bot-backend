@@ -5,31 +5,14 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 10000;
 
-// 🔥 CORS Configuration
-const allowedOrigins = [
-  'http://localhost:3000',           // Local development
-  'https://trading-bot-frontend-1rur001lm-vishvanaths-projects-b8636267.vercel.app/', // Your deployed frontend URL
-  'https://claude.ai',               // Claude.ai (won't work due to CSP)
-  '*'                                // Allow all for testing
-];
-
+// CORS Configuration
 app.use(cors({
-  origin: function(origin, callback) {
-    // Allow requests with no origin (mobile apps, curl, etc)
-    if (!origin) return callback(null, true);
-    
-    if (allowedOrigins.indexOf(origin) !== -1 || allowedOrigins.includes('*')) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
+  origin: '*',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true
+  credentials: false
 }));
 
-// Handle preflight requests
 app.options('*', cors());
 
 app.use(express.json());
@@ -71,6 +54,7 @@ app.get('/', (req, res) => {
     version: '1.0.0',
     endpoints: {
       health: '/health',
+      config: '/config',
       trades: '/api/trades',
       positions: '/api/positions'
     }
@@ -86,25 +70,31 @@ app.use((err, req, res, next) => {
   });
 });
 
+// Start server with database connection test
 const { testConnection } = require('./config/database');
 
-// Test database connection on startup
-testConnection();
+async function startServer() {
+  // Test database connection
+  if (process.env.DATABASE_URL) {
+    await testConnection();
+  } else {
+    console.log('⚠️  No DATABASE_URL found - database features disabled');
+  }
+  
+  // Start listening
+  app.listen(PORT, () => {
+    console.log(`✅ Server running on port ${PORT}`);
+    console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`📊 API URL: http://localhost:${PORT}`);
+    console.log(`💾 Database: ${process.env.DATABASE_URL ? 'Connected ✅' : 'NOT CONFIGURED ⚠️'}`);
+    console.log(`🔑 Binance: ${process.env.BINANCE_API_KEY ? 'Configured ✅' : 'NOT CONFIGURED (Paper trading only) 📄'}`);
+  });
+}
 
-app.listen(PORT, () => {
-  console.log(`✅ Server running on port ${PORT}`);
-  console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`📊 API URL: http://localhost:${PORT}`);
-  console.log(`💾 Database: ${process.env.DATABASE_URL ? 'Connected' : 'NOT CONFIGURED'}`);
-  console.log(`🔑 Binance: ${process.env.BINANCE_API_KEY ? 'Configured' : 'NOT CONFIGURED (Paper trading only)'}`);
-});
-
-// Start server
-app.listen(PORT, () => {
-  console.log(`✅ Server running on port ${PORT}`);
-  console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`📊 API URL: http://localhost:${PORT}`);
+// Start the server
+startServer().catch(err => {
+  console.error('Failed to start server:', err);
+  process.exit(1);
 });
 
 module.exports = app;
-
