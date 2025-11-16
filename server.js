@@ -60,7 +60,8 @@ app.get('/', (req, res) => {
       health: '/health',
       config: '/config',
       trades: '/api/trades',
-      positions: '/api/positions'
+      positions: '/api/positions',
+      portfolio: '/api/portfolio'
     }
   });
 });
@@ -84,4 +85,5 @@ app.listen(PORT, () => {
 });
 
 module.exports = app;
+
 
