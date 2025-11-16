@@ -20,14 +20,14 @@ app.use(express.json());
 // Import routes
 const tradesRouter = require('./routes/trades');
 const positionsRouter = require('./routes/positions');
-// Add this with other route imports
 const portfolioRouter = require('./routes/portfolio');
+const syncRouter = require('./routes/sync');
 
 // Use routes
 app.use('/api/trades', tradesRouter);
 app.use('/api/positions', positionsRouter);
-// Add this with other route uses
 app.use('/api/portfolio', portfolioRouter);
+app.use('/api/sync', syncRouter);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -61,7 +61,8 @@ app.get('/', (req, res) => {
       config: '/config',
       trades: '/api/trades',
       positions: '/api/positions',
-      portfolio: '/api/portfolio'
+      portfolio: '/api/portfolio',
+      sync: '/api/sync'
     }
   });
 });
@@ -85,5 +86,3 @@ app.listen(PORT, () => {
 });
 
 module.exports = app;
-
-
