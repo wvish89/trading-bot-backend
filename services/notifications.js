@@ -1,70 +1,64 @@
-// Notification service for email, SMS, and Telegram
-// Note: Install packages in your backend: npm install axios
-
 class NotificationService {
   constructor(config) {
     this.config = config || {};
-  }
-
-  // Send email notification (requires nodemailer setup)
-  async sendEmail(subject, message) {
-    console.log(`📧 Email: ${subject} - ${message}`);
-    // Implement with nodemailer, SendGrid, or AWS SES
-    // const nodemailer = require('nodemailer');
-    // ... email sending code
-  }
-
-  // Send SMS notification (requires Twilio)
-  async sendSMS(message) {
-    console.log(`📱 SMS: ${message}`);
-    // Implement with Twilio
-    // const twilio = require('twilio');
-    // ... SMS sending code
   }
 
   // Send Telegram notification
   async sendTelegram(message) {
     if (!this.config.telegramBotToken || !this.config.telegramChatId) {
       console.log('⚠️ Telegram not configured');
-      return;
+      return false;
     }
 
     try {
-      const axios = require('axios');
       const url = `https://api.telegram.org/bot${this.config.telegramBotToken}/sendMessage`;
       
-      await axios.post(url, {
-        chat_id: this.config.telegramChatId,
-        text: message,
-        parse_mode: 'HTML'
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: this.config.telegramChatId,
+          text: message,
+          parse_mode: 'HTML'
+        })
       });
       
-      console.log('✅ Telegram notification sent');
+      const result = await response.json();
+      
+      if (result.ok) {
+        console.log('✅ Telegram notification sent');
+        return true;
+      } else {
+        console.error('❌ Telegram error:', result.description);
+        return false;
+      }
     } catch (error) {
       console.error('❌ Telegram error:', error.message);
+      return false;
     }
   }
 
-  // Send trade alert to all enabled channels
+  // Send trade alert to Telegram
   async sendTradeAlert(trade) {
+    const modeEmoji = trade.mode === 'live' ? '🔴' : '📄';
+    const typeEmoji = trade.trade_type === 'BUY' ? '🟢' : '🔴';
+    
     const message = `
-🤖 Trading Bot Alert
+${modeEmoji} <b>${trade.mode.toUpperCase()} TRADING ALERT</b>
 
-Type: ${trade.trade_type}
-Symbol: ${trade.symbol}
-Price: $${trade.price}
-Quantity: ${trade.quantity}
-${trade.profit_loss ? `P&L: $${trade.profit_loss}` : ''}
-Confidence: ${trade.confidence}%
-Time: ${new Date().toLocaleString()}
+${typeEmoji} <b>${trade.trade_type}</b>
+━━━━━━━━━━━━━━━━━━
+📊 Symbol: ${trade.symbol}
+💰 Price: $${parseFloat(trade.price).toFixed(2)}
+📦 Quantity: ${parseFloat(trade.quantity).toFixed(6)}
+💵 Total: $${parseFloat(trade.total_value).toFixed(2)}
+${trade.profit_loss ? `📈 P&L: $${parseFloat(trade.profit_loss).toFixed(2)}` : ''}
+🎯 Confidence: ${trade.confidence || 'N/A'}%
+🧠 Strategy: ${trade.strategy || 'N/A'}
+⏰ Time: ${new Date(trade.created_at || Date.now()).toLocaleString()}
     `.trim();
 
-    // Send to all configured channels
-    await Promise.all([
-      this.sendTelegram(message),
-      // this.sendEmail('Trade Alert', message),
-      // this.sendSMS(message)
-    ]);
+    return await this.sendTelegram(message);
   }
 }
 
