@@ -2,8 +2,9 @@ const express = require('express');
 const router = express.Router();
 const { query } = require('../config/database');
 const BinanceAPI = require('../services/binanceAPI');
+const NotificationService = require('../services/notifications');
 
-// Initialize Binance API (only if keys are provided)
+// Initialize Binance API
 let binance = null;
 if (process.env.BINANCE_API_KEY && process.env.BINANCE_SECRET) {
   binance = new BinanceAPI(
@@ -11,6 +12,12 @@ if (process.env.BINANCE_API_KEY && process.env.BINANCE_SECRET) {
     process.env.BINANCE_SECRET
   );
 }
+
+// Initialize Notification Service
+const notifications = new NotificationService({
+  telegramBotToken: process.env.TELEGRAM_BOT_TOKEN,
+  telegramChatId: process.env.TELEGRAM_CHAT_ID
+});
 
 // Validate if live trading is allowed
 function canTradeLive() {
@@ -75,7 +82,7 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// POST create new trade (and execute on Binance if live mode)
+// POST create new trade (with Telegram notification)
 router.post('/', async (req, res) => {
   try {
     const { 
@@ -85,33 +92,30 @@ router.post('/', async (req, res) => {
       quantity, 
       confidence,
       strategy,
-      mode
+      mode,
+      enable_telegram
     } = req.body;
     
-    // Validate required fields
     if (!symbol || !trade_type || !price || !quantity) {
       return res.status(400).json({ 
         success: false,
-        error: 'Missing required fields: symbol, trade_type, price, quantity' 
+        error: 'Missing required fields' 
       });
     }
 
-    // Check if live trading is possible
     if (mode === 'live' && !canTradeLive()) {
       return res.status(400).json({
         success: false,
-        error: 'Live trading not available. Binance API credentials not configured.',
-        hint: 'Please add BINANCE_API_KEY and BINANCE_SECRET to environment variables'
+        error: 'Live trading not available. Binance API not configured.'
       });
     }
     
     const total_value = price * quantity;
     let orderResult = null;
     
-    // Execute real trade on Binance if in live mode
+    // Execute on Binance if live mode
     if (mode === 'live' && binance) {
       try {
-        // Convert symbol format: BTC/USD -> BTCUSDT
         const binanceSymbol = symbol.replace('/', '').toUpperCase();
         
         console.log(`🔴 LIVE TRADE: ${trade_type} ${quantity} ${binanceSymbol} @ $${price}`);
@@ -127,27 +131,45 @@ router.post('/', async (req, res) => {
         console.error('❌ Binance order failed:', binanceError);
         return res.status(500).json({
           success: false,
-          error: 'Failed to execute trade on Binance',
+          error: 'Failed to execute on Binance',
           details: binanceError.message
         });
       }
-    } else if (mode === 'paper') {
+    } else {
       console.log(`📄 PAPER TRADE: ${trade_type} ${quantity} ${symbol} @ $${price}`);
     }
     
-    // Save trade to database
+    // Save to database
     const result = await query(
       `INSERT INTO trades 
-       (symbol, trade_type, price, quantity, total_value, confidence, strategy)
-       VALUES ($1, $2, $3, $4, $5, $6, $7) 
+       (symbol, trade_type, price, quantity, total_value, confidence, strategy, mode)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
        RETURNING *`,
-      [symbol, trade_type, price, quantity, total_value, confidence, strategy]
+      [symbol, trade_type, price, quantity, total_value, confidence, strategy, mode]
     );
+    
+    const savedTrade = result.rows[0];
+    
+    // Send Telegram notification if enabled
+    let telegramSent = false;
+    if (enable_telegram) {
+      try {
+        await notifications.sendTradeAlert({
+          ...savedTrade,
+          mode: mode
+        });
+        telegramSent = true;
+        console.log('📱 Telegram notification sent');
+      } catch (telegramError) {
+        console.error('❌ Telegram notification failed:', telegramError);
+      }
+    }
     
     res.status(201).json({ 
       success: true, 
-      trade: result.rows[0],
+      trade: savedTrade,
       binanceOrder: orderResult,
+      telegramSent: telegramSent,
       mode: mode
     });
     
@@ -177,7 +199,6 @@ router.get('/stats/summary', async (req, res) => {
     
     const stats = result.rows[0];
     
-    // Calculate win rate
     const completedTrades = await query(`
       SELECT COUNT(*) as count 
       FROM trades 
@@ -212,18 +233,17 @@ router.get('/stats/summary', async (req, res) => {
   }
 });
 
-// GET current Binance price (real-time)
+// GET current Binance price (ALWAYS returns real-time data)
 router.get('/price/:symbol', async (req, res) => {
   try {
     if (!binance) {
       return res.status(503).json({
         success: false,
-        error: 'Binance API not configured. Using simulated prices.'
+        error: 'Binance API not configured'
       });
     }
     
     const { symbol } = req.params;
-    // Convert symbol format: BTCUSDT or BTC/USD -> BTCUSDT
     const binanceSymbol = symbol.replace('/', '').toUpperCase();
     
     const price = await binance.getPrice(binanceSymbol);
@@ -233,14 +253,14 @@ router.get('/price/:symbol', async (req, res) => {
       symbol: symbol,
       binanceSymbol: binanceSymbol,
       price: parseFloat(price.price),
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      source: 'binance_realtime'
     });
   } catch (error) {
     console.error('Error getting price:', error);
     res.status(500).json({
       success: false,
-      error: error.message,
-      hint: 'Make sure the symbol is valid (e.g., BTCUSDT)'
+      error: error.message
     });
   }
 });
