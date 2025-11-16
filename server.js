@@ -20,10 +20,14 @@ app.use(express.json());
 // Import routes
 const tradesRouter = require('./routes/trades');
 const positionsRouter = require('./routes/positions');
+// Add this with other route imports
+const portfolioRouter = require('./routes/portfolio');
 
 // Use routes
 app.use('/api/trades', tradesRouter);
 app.use('/api/positions', positionsRouter);
+// Add this with other route uses
+app.use('/api/portfolio', portfolioRouter);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -80,3 +84,4 @@ app.listen(PORT, () => {
 });
 
 module.exports = app;
+
