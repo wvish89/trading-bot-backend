@@ -5,7 +5,6 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 10000;
 
-// CORS Configuration
 app.use(cors({
   origin: '*',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -14,7 +13,6 @@ app.use(cors({
 }));
 
 app.options('*', cors());
-
 app.use(express.json());
 
 // Import routes
@@ -22,14 +20,16 @@ const tradesRouter = require('./routes/trades');
 const positionsRouter = require('./routes/positions');
 const portfolioRouter = require('./routes/portfolio');
 const syncRouter = require('./routes/sync');
+const notificationsRouter = require('./routes/notifications');
 
 // Use routes
 app.use('/api/trades', tradesRouter);
 app.use('/api/positions', positionsRouter);
 app.use('/api/portfolio', portfolioRouter);
 app.use('/api/sync', syncRouter);
+app.use('/api/notifications', notificationsRouter);
 
-// Health check endpoint
+// Health check
 app.get('/health', (req, res) => {
   res.json({ 
     status: 'ok', 
@@ -38,31 +38,33 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Configuration status endpoint
+// Config
 app.get('/config', (req, res) => {
   res.json({ 
     success: true,
     config: {
       databaseConnected: !!process.env.DATABASE_URL,
       binanceConfigured: !!(process.env.BINANCE_API_KEY && process.env.BINANCE_SECRET),
+      telegramConfigured: !!(process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID),
       liveTradingAvailable: !!(process.env.BINANCE_API_KEY && process.env.BINANCE_SECRET),
       environment: process.env.NODE_ENV || 'development'
     }
   });
 });
 
-// Root endpoint
+// Root
 app.get('/', (req, res) => {
   res.json({ 
     message: 'Trading Bot API',
-    version: '1.0.0',
+    version: '2.0.0',
     endpoints: {
       health: '/health',
       config: '/config',
       trades: '/api/trades',
       positions: '/api/positions',
       portfolio: '/api/portfolio',
-      sync: '/api/sync'
+      sync: '/api/sync',
+      notifications: '/api/notifications'
     }
   });
 });
@@ -80,9 +82,9 @@ app.use((err, req, res, next) => {
 app.listen(PORT, () => {
   console.log(`✅ Server running on port ${PORT}`);
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`📊 API URL: http://localhost:${PORT}`);
-  console.log(`💾 Database: ${process.env.DATABASE_URL ? 'Connected ✅' : 'NOT CONFIGURED ⚠️'}`);
-  console.log(`🔑 Binance: ${process.env.BINANCE_API_KEY ? 'Configured ✅' : 'NOT CONFIGURED (Paper trading only) 📄'}`);
+  console.log(`💾 Database: ${process.env.DATABASE_URL ? '✅' : '❌'}`);
+  console.log(`🔑 Binance: ${process.env.BINANCE_API_KEY ? '✅' : '❌'}`);
+  console.log(`📱 Telegram: ${process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID ? '✅' : '❌'}`);
 });
 
 module.exports = app;
