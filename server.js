@@ -21,6 +21,7 @@ const positionsRouter = require('./routes/positions');
 const portfolioRouter = require('./routes/portfolio');
 const syncRouter = require('./routes/sync');
 const notificationsRouter = require('./routes/notifications');
+const advancedRouter = require('./routes/advanced');
 
 // Use routes
 app.use('/api/trades', tradesRouter);
@@ -28,6 +29,7 @@ app.use('/api/positions', positionsRouter);
 app.use('/api/portfolio', portfolioRouter);
 app.use('/api/sync', syncRouter);
 app.use('/api/notifications', notificationsRouter);
+app.use('/api/advanced', advancedRouter);
 
 // Health check
 app.get('/health', (req, res) => {
@@ -47,7 +49,14 @@ app.get('/config', (req, res) => {
       binanceConfigured: !!(process.env.BINANCE_API_KEY && process.env.BINANCE_SECRET),
       telegramConfigured: !!(process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID),
       liveTradingAvailable: !!(process.env.BINANCE_API_KEY && process.env.BINANCE_SECRET),
-      environment: process.env.NODE_ENV || 'development'
+      environment: process.env.NODE_ENV || 'development',
+      features: {
+        mlAnalysis: true,
+        riskManagement: true,
+        autoTrading: true,
+        backtesting: true,
+        advancedStrategies: true
+      }
     }
   });
 });
@@ -55,7 +64,7 @@ app.get('/config', (req, res) => {
 // Root
 app.get('/', (req, res) => {
   res.json({ 
-    message: 'Trading Bot API',
+    message: 'Advanced AI Trading Bot API',
     version: '2.0.0',
     endpoints: {
       health: '/health',
@@ -64,7 +73,24 @@ app.get('/', (req, res) => {
       positions: '/api/positions',
       portfolio: '/api/portfolio',
       sync: '/api/sync',
-      notifications: '/api/notifications'
+      notifications: '/api/notifications',
+      advanced: '/api/advanced'
+    },
+    advancedFeatures: {
+      analysis: '/api/advanced/analyze',
+      strategy: '/api/advanced/execute-strategy',
+      riskAssessment: '/api/advanced/risk-assessment',
+      riskReport: '/api/advanced/risk-report',
+      backtest: '/api/advanced/backtest',
+      predict: '/api/advanced/predict',
+      anomalies: '/api/advanced/anomalies/:symbol',
+      arbitrage: '/api/advanced/arbitrage',
+      rebalance: '/api/advanced/rebalance',
+      autoTrade: {
+        start: '/api/advanced/auto-trade/start',
+        stop: '/api/advanced/auto-trade/stop',
+        status: '/api/advanced/auto-trade/status'
+      }
     }
   });
 });
@@ -85,6 +111,7 @@ app.listen(PORT, () => {
   console.log(`💾 Database: ${process.env.DATABASE_URL ? '✅' : '❌'}`);
   console.log(`🔑 Binance: ${process.env.BINANCE_API_KEY ? '✅' : '❌'}`);
   console.log(`📱 Telegram: ${process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID ? '✅' : '❌'}`);
+  console.log(`🤖 Advanced Features: ✅ ML Analysis, Risk Management, Auto-Trading`);
 });
 
 module.exports = app;
