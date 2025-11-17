@@ -19,27 +19,43 @@ class BinanceAPI {
       .digest('hex');
   }
 
-  // Get current price for a symbol
+  // Get current price for a symbol (PUBLIC - no auth required)
   async getPrice(symbol) {
     try {
+      console.log(`📊 Fetching price for ${symbol}...`);
+      
       const response = await fetch(
-        `${this.baseURL}/api/v3/ticker/price?symbol=${symbol}`
+        `${this.baseURL}/api/v3/ticker/price?symbol=${symbol}`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }
       );
       
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorText = await response.text();
+        console.error(`❌ Binance API error (${response.status}):`, errorText);
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
       }
       
-      return await response.json();
+      const data = await response.json();
+      console.log(`✅ Got price for ${symbol}: $${data.price}`);
+      return data;
     } catch (error) {
-      console.error('Error getting price:', error);
+      console.error('❌ Error getting price from Binance:', error.message);
       throw error;
     }
   }
 
-  // Get account information
+  // Get account information (REQUIRES AUTH)
   async getAccount() {
     try {
+      if (!this.apiKey || !this.apiSecret) {
+        throw new Error('API credentials not configured');
+      }
+
       const timestamp = Date.now();
       const queryString = `timestamp=${timestamp}`;
       const signature = this.signRequest(queryString);
@@ -47,7 +63,10 @@ class BinanceAPI {
       const response = await fetch(
         `${this.baseURL}/api/v3/account?${queryString}&signature=${signature}`,
         {
-          headers: { 'X-MBX-APIKEY': this.apiKey }
+          headers: { 
+            'X-MBX-APIKEY': this.apiKey,
+            'Content-Type': 'application/json'
+          }
         }
       );
       
@@ -63,7 +82,7 @@ class BinanceAPI {
     }
   }
 
-  // NEW: Get account balance for specific asset
+  // Get account balance for specific asset (REQUIRES AUTH)
   async getBalance(asset = 'USDT') {
     try {
       const account = await this.getAccount();
@@ -81,9 +100,13 @@ class BinanceAPI {
     }
   }
 
-  // NEW: Get all open orders
+  // Get all open orders (REQUIRES AUTH)
   async getOpenOrders(symbol) {
     try {
+      if (!this.apiKey || !this.apiSecret) {
+        throw new Error('API credentials not configured');
+      }
+
       const timestamp = Date.now();
       let queryString = `timestamp=${timestamp}`;
       
@@ -96,7 +119,10 @@ class BinanceAPI {
       const response = await fetch(
         `${this.baseURL}/api/v3/openOrders?${queryString}&signature=${signature}`,
         {
-          headers: { 'X-MBX-APIKEY': this.apiKey }
+          headers: { 
+            'X-MBX-APIKEY': this.apiKey,
+            'Content-Type': 'application/json'
+          }
         }
       );
       
@@ -112,7 +138,7 @@ class BinanceAPI {
     }
   }
 
-  // NEW: Get account snapshot (positions + balances)
+  // Get account snapshot (positions + balances) (REQUIRES AUTH)
   async getAccountSnapshot() {
     try {
       const account = await this.getAccount();
@@ -140,9 +166,13 @@ class BinanceAPI {
     }
   }
 
-  // Place market order
+  // Place market order (REQUIRES AUTH)
   async placeOrder(symbol, side, quantity) {
     try {
+      if (!this.apiKey || !this.apiSecret) {
+        throw new Error('API credentials not configured');
+      }
+
       const timestamp = Date.now();
       const queryString = `symbol=${symbol}&side=${side}&type=MARKET&quantity=${quantity}&timestamp=${timestamp}`;
       const signature = this.signRequest(queryString);
@@ -151,7 +181,10 @@ class BinanceAPI {
         `${this.baseURL}/api/v3/order?${queryString}&signature=${signature}`,
         {
           method: 'POST',
-          headers: { 'X-MBX-APIKEY': this.apiKey }
+          headers: { 
+            'X-MBX-APIKEY': this.apiKey,
+            'Content-Type': 'application/json'
+          }
         }
       );
       
@@ -169,9 +202,13 @@ class BinanceAPI {
     }
   }
 
-  // Place limit order
+  // Place limit order (REQUIRES AUTH)
   async placeLimitOrder(symbol, side, quantity, price) {
     try {
+      if (!this.apiKey || !this.apiSecret) {
+        throw new Error('API credentials not configured');
+      }
+
       const timestamp = Date.now();
       const queryString = `symbol=${symbol}&side=${side}&type=LIMIT&timeInForce=GTC&quantity=${quantity}&price=${price}&timestamp=${timestamp}`;
       const signature = this.signRequest(queryString);
@@ -180,7 +217,10 @@ class BinanceAPI {
         `${this.baseURL}/api/v3/order?${queryString}&signature=${signature}`,
         {
           method: 'POST',
-          headers: { 'X-MBX-APIKEY': this.apiKey }
+          headers: { 
+            'X-MBX-APIKEY': this.apiKey,
+            'Content-Type': 'application/json'
+          }
         }
       );
       
@@ -196,9 +236,13 @@ class BinanceAPI {
     }
   }
 
-  // Get order status
+  // Get order status (REQUIRES AUTH)
   async getOrder(symbol, orderId) {
     try {
+      if (!this.apiKey || !this.apiSecret) {
+        throw new Error('API credentials not configured');
+      }
+
       const timestamp = Date.now();
       const queryString = `symbol=${symbol}&orderId=${orderId}&timestamp=${timestamp}`;
       const signature = this.signRequest(queryString);
@@ -206,7 +250,10 @@ class BinanceAPI {
       const response = await fetch(
         `${this.baseURL}/api/v3/order?${queryString}&signature=${signature}`,
         {
-          headers: { 'X-MBX-APIKEY': this.apiKey }
+          headers: { 
+            'X-MBX-APIKEY': this.apiKey,
+            'Content-Type': 'application/json'
+          }
         }
       );
       
@@ -222,9 +269,13 @@ class BinanceAPI {
     }
   }
 
-  // Cancel order
+  // Cancel order (REQUIRES AUTH)
   async cancelOrder(symbol, orderId) {
     try {
+      if (!this.apiKey || !this.apiSecret) {
+        throw new Error('API credentials not configured');
+      }
+
       const timestamp = Date.now();
       const queryString = `symbol=${symbol}&orderId=${orderId}&timestamp=${timestamp}`;
       const signature = this.signRequest(queryString);
@@ -233,7 +284,10 @@ class BinanceAPI {
         `${this.baseURL}/api/v3/order?${queryString}&signature=${signature}`,
         {
           method: 'DELETE',
-          headers: { 'X-MBX-APIKEY': this.apiKey }
+          headers: { 
+            'X-MBX-APIKEY': this.apiKey,
+            'Content-Type': 'application/json'
+          }
         }
       );
       
@@ -249,11 +303,17 @@ class BinanceAPI {
     }
   }
 
-  // Get 24hr ticker price change statistics
+  // Get 24hr ticker price change statistics (PUBLIC - no auth required)
   async get24hrStats(symbol) {
     try {
       const response = await fetch(
-        `${this.baseURL}/api/v3/ticker/24hr?symbol=${symbol}`
+        `${this.baseURL}/api/v3/ticker/24hr?symbol=${symbol}`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }
       );
       
       if (!response.ok) {
