@@ -4,14 +4,12 @@ const { query } = require('../config/database');
 const BinanceAPI = require('../services/binanceAPI');
 const NotificationService = require('../services/notifications');
 
-// Initialize Binance API
-let binance = null;
-if (process.env.BINANCE_API_KEY && process.env.BINANCE_SECRET) {
-  binance = new BinanceAPI(
-    process.env.BINANCE_API_KEY,
-    process.env.BINANCE_SECRET
-  );
-}
+// Initialize Binance API - IMPORTANT: Always initialize for price fetching
+// Public endpoints (like getPrice) work WITHOUT API keys
+const binance = new BinanceAPI(
+  process.env.BINANCE_API_KEY || '',
+  process.env.BINANCE_SECRET || ''
+);
 
 // Initialize Notification Service
 const notifications = new NotificationService({
@@ -19,9 +17,9 @@ const notifications = new NotificationService({
   telegramChatId: process.env.TELEGRAM_CHAT_ID
 });
 
-// Validate if live trading is allowed
+// Validate if live trading is allowed (requires API keys)
 function canTradeLive() {
-  return !!(process.env.BINANCE_API_KEY && process.env.BINANCE_SECRET && binance);
+  return !!(process.env.BINANCE_API_KEY && process.env.BINANCE_SECRET);
 }
 
 // GET all trades
@@ -114,7 +112,7 @@ router.post('/', async (req, res) => {
     let orderResult = null;
     
     // Execute on Binance if live mode
-    if (mode === 'live' && binance) {
+    if (mode === 'live' && canTradeLive()) {
       try {
         const binanceSymbol = symbol.replace('/', '').toUpperCase();
         
@@ -233,19 +231,16 @@ router.get('/stats/summary', async (req, res) => {
   }
 });
 
-// GET current Binance price (ALWAYS returns real-time data)
+// GET current Binance price (PUBLIC API - no auth required)
+// This endpoint ALWAYS works, even without API keys
 router.get('/price/:symbol', async (req, res) => {
   try {
-    if (!binance) {
-      return res.status(503).json({
-        success: false,
-        error: 'Binance API not configured'
-      });
-    }
-    
     const { symbol } = req.params;
     const binanceSymbol = symbol.replace('/', '').toUpperCase();
     
+    console.log(`📊 Getting price for ${binanceSymbol}...`);
+    
+    // Call the Binance public API
     const price = await binance.getPrice(binanceSymbol);
     
     res.json({
@@ -257,10 +252,12 @@ router.get('/price/:symbol', async (req, res) => {
       source: 'binance_realtime'
     });
   } catch (error) {
-    console.error('Error getting price:', error);
+    console.error('❌ Error getting price:', error);
     res.status(500).json({
       success: false,
-      error: error.message
+      error: error.message,
+      details: 'Failed to fetch price from Binance API. The API may be temporarily unavailable.',
+      symbol: req.params.symbol
     });
   }
 });
