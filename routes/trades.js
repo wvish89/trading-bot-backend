@@ -238,10 +238,21 @@ router.get('/price/:symbol', async (req, res) => {
     const { symbol } = req.params;
     const binanceSymbol = symbol.replace('/', '').toUpperCase();
     
-    console.log(`📊 Getting price for ${binanceSymbol}...`);
+    console.log(`📊 [${new Date().toISOString()}] Getting price for ${binanceSymbol}...`);
+    
+    // Validate symbol format
+    if (!binanceSymbol || binanceSymbol.length < 3) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid symbol format',
+        symbol: symbol
+      });
+    }
     
     // Call the Binance public API
     const price = await binance.getPrice(binanceSymbol);
+    
+    console.log(`✅ [${new Date().toISOString()}] Price fetched successfully: ${binanceSymbol} = ${price.price}`);
     
     res.json({
       success: true,
@@ -252,12 +263,15 @@ router.get('/price/:symbol', async (req, res) => {
       source: 'binance_realtime'
     });
   } catch (error) {
-    console.error('❌ Error getting price:', error);
+    console.error(`❌ [${new Date().toISOString()}] Error getting price:`, error.message);
+    console.error('Error stack:', error.stack);
+    
     res.status(500).json({
       success: false,
-      error: error.message,
-      details: 'Failed to fetch price from Binance API. The API may be temporarily unavailable.',
-      symbol: req.params.symbol
+      error: error.message || 'Unknown error',
+      details: 'Failed to fetch price from Binance API. The API may be temporarily unavailable or rate-limited.',
+      symbol: req.params.symbol,
+      timestamp: new Date().toISOString()
     });
   }
 });
