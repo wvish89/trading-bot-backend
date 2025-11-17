@@ -233,12 +233,15 @@ router.get('/stats/summary', async (req, res) => {
 
 // GET current Binance price (PUBLIC API - no auth required)
 // This endpoint ALWAYS works, even without API keys
+// GET current Binance price - ALWAYS returns 200 with real or simulated data
 router.get('/price/:symbol', async (req, res) => {
+  const startTime = Date.now();
+  
   try {
     const { symbol } = req.params;
     const binanceSymbol = symbol.replace('/', '').toUpperCase();
     
-    console.log(`📊 [${new Date().toISOString()}] Getting price for ${binanceSymbol}...`);
+    console.log(`\n📊 [${new Date().toISOString()}] Price request for ${binanceSymbol}`);
     
     // Validate symbol format
     if (!binanceSymbol || binanceSymbol.length < 3) {
@@ -249,31 +252,49 @@ router.get('/price/:symbol', async (req, res) => {
       });
     }
     
-    // Call the Binance public API
-    const price = await binance.getPrice(binanceSymbol);
+    // Fetch price with all retry logic built in
+    const priceData = await binance.getPrice(binanceSymbol);
     
-    console.log(`✅ [${new Date().toISOString()}] Price fetched successfully: ${binanceSymbol} = $${price.price}`);
+    const responseTime = Date.now() - startTime;
     
-    res.json({
+    // Always return 200 OK, even if simulated
+    const response = {
       success: true,
       symbol: symbol,
       binanceSymbol: binanceSymbol,
-      price: parseFloat(price.price),
+      price: parseFloat(priceData.price),
       timestamp: new Date().toISOString(),
-      source: 'binance_realtime'
-    });
-  } catch (error) {
-    console.error(`❌ [${new Date().toISOString()}] Error getting price:`, error.message);
-    console.error('Error stack:', error.stack);
+      source: priceData.simulated ? 'simulated' : 'binance_live',
+      simulated: priceData.simulated || false,
+      responseTime: `${responseTime}ms`
+    };
     
-    res.status(500).json({
+    // Add warning if simulated
+    if (priceData.simulated) {
+      response.warning = '⚠️ Using simulated price - Binance API temporarily unavailable';
+      console.warn(`⚠️ Returned simulated price for ${binanceSymbol}`);
+    } else {
+      console.log(`✅ Real price: ${binanceSymbol} = $${priceData.price} (${responseTime}ms)`);
+    }
+    
+    res.json(response);
+    
+  } catch (error) {
+    // Catch-all error handler - should rarely reach here
+    console.error(`❌ Critical error in price endpoint:`, error);
+    
+    // Return a safe fallback response (never 500)
+    res.status(200).json({
       success: false,
-      error: error.message || 'Unknown error',
-      details: 'Failed to fetch price from Binance API. The API may be temporarily unavailable or rate-limited.',
+      error: 'Service temporarily unavailable',
       symbol: req.params.symbol,
-      timestamp: new Date().toISOString()
+      price: 0,
+      timestamp: new Date().toISOString(),
+      simulated: true,
+      warning: 'Please try again in a moment'
     });
   }
 });
 
 module.exports = router;
+
