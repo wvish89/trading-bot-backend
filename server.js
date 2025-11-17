@@ -40,6 +40,81 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Binance API health check endpoint
+app.get('/api/health/binance', async (req, res) => {
+  const BinanceAPI = require('./services/binanceAPI');
+  const testBinance = new BinanceAPI(
+    process.env.BINANCE_API_KEY || '',
+    process.env.BINANCE_SECRET || ''
+  );
+  
+  const results = {
+    timestamp: new Date().toISOString(),
+    tests: {}
+  };
+  
+  // Test 1: Ping
+  try {
+    const pingStart = Date.now();
+    const pingSuccess = await testBinance.ping();
+    results.tests.ping = {
+      status: pingSuccess ? 'OK' : 'FAILED',
+      responseTime: `${Date.now() - pingStart}ms`
+    };
+  } catch (error) {
+    results.tests.ping = {
+      status: 'ERROR',
+      error: error.message
+    };
+  }
+  
+  // Test 2: Server Time
+  try {
+    const timeStart = Date.now();
+    const serverTime = await testBinance.getServerTime();
+    results.tests.serverTime = {
+      status: 'OK',
+      serverTime: serverTime.serverTime,
+      responseTime: `${Date.now() - timeStart}ms`
+    };
+  } catch (error) {
+    results.tests.serverTime = {
+      status: 'ERROR',
+      error: error.message
+    };
+  }
+  
+  // Test 3: Get Price
+  try {
+    const priceStart = Date.now();
+    const btcPrice = await testBinance.getPrice('BTCUSDT');
+    results.tests.price = {
+      status: btcPrice.simulated ? 'SIMULATED' : 'OK',
+      symbol: 'BTCUSDT',
+      price: btcPrice.price,
+      simulated: btcPrice.simulated,
+      responseTime: `${Date.now() - priceStart}ms`
+    };
+  } catch (error) {
+    results.tests.price = {
+      status: 'ERROR',
+      error: error.message
+    };
+  }
+  
+  // Test 4: Cache Stats
+  results.cache = testBinance.getCacheStats();
+  
+  // Overall status
+  const allOK = Object.values(results.tests).every(t => t.status === 'OK');
+  const someSimulated = Object.values(results.tests).some(t => t.status === 'SIMULATED');
+  
+  results.overall = allOK ? 'HEALTHY' : someSimulated ? 'DEGRADED' : 'UNHEALTHY';
+  
+  res.json(results);
+});
+
+
 // Config
 app.get('/config', (req, res) => {
   res.json({ 
@@ -115,3 +190,4 @@ app.listen(PORT, () => {
 });
 
 module.exports = app;
+
