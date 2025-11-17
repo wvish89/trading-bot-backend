@@ -252,7 +252,7 @@ router.get('/price/:symbol', async (req, res) => {
     // Call the Binance public API
     const price = await binance.getPrice(binanceSymbol);
     
-    console.log(`✅ [${new Date().toISOString()}] Price fetched successfully: ${binanceSymbol} = ${price.price}`);
+    console.log(`✅ [${new Date().toISOString()}] Price fetched successfully: ${binanceSymbol} = $${price.price}`);
     
     res.json({
       success: true,
