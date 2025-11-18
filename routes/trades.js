@@ -475,6 +475,44 @@ router.post('/', async (req, res) => {
     if (profitLoss !== null) {
       console.log(`💰 Trade P&L: ${profitLoss > 0 ? '+' : ''}$${profitLoss.toFixed(2)}`);
     }
+
+    // Calculate and update P&L immediately
+if (trade_type === 'SELL') {
+  // Find matching BUY trade
+  const buyResult = await query(`
+    SELECT * FROM trades 
+    WHERE symbol = $1 
+    AND trade_type = 'BUY' 
+    AND profit_loss IS NULL
+    ORDER BY created_at DESC
+    LIMIT 1
+  `, [symbol]);
+  
+  if (buyResult.rows.length > 0) {
+    const buyTrade = buyResult.rows[0];
+    const buyValue = parseFloat(buyTrade.price) * parseFloat(buyTrade.quantity);
+    const sellValue = parseFloat(price) * parseFloat(quantity);
+    const profitLoss = sellValue - buyValue;
+    
+    // Update both trades
+    await query(`
+      UPDATE trades 
+      SET profit_loss = $1 
+      WHERE id = $2 OR id = $3
+    `, [profitLoss, buyTrade.id, savedTrade.id]);
+    
+    // Update portfolio
+    await query(`
+      UPDATE portfolio 
+      SET profit_loss = profit_loss + $1
+      WHERE id = 1
+    `, [profitLoss]);
+    
+    savedTrade.profit_loss = profitLoss;
+    console.log(`💰 P&L Calculated: $${profitLoss.toFixed(2)}`);
+  }
+}
+
     
     // Send Telegram notification if enabled
     let telegramSent = false;
@@ -513,5 +551,6 @@ router.post('/', async (req, res) => {
 });
 
 module.exports = router;
+
 
 
