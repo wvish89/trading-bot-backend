@@ -296,5 +296,222 @@ router.get('/price/:symbol', async (req, res) => {
   }
 });
 
+// Helper function to calculate P&L for a trade
+async function calculateTradeProfitLoss(trade) {
+  try {
+    // For BUY trades, check if there's a matching SELL
+    if (trade.trade_type === 'BUY') {
+      // Find corresponding SELL trade
+      const sellResult = await query(`
+        SELECT * FROM trades 
+        WHERE symbol = $1 
+        AND trade_type = 'SELL' 
+        AND created_at > $2
+        AND profit_loss IS NULL
+        ORDER BY created_at ASC
+        LIMIT 1
+      `, [trade.symbol, trade.created_at]);
+      
+      if (sellResult.rows.length > 0) {
+        const sellTrade = sellResult.rows[0];
+        
+        // Calculate P&L
+        const buyValue = parseFloat(trade.price) * parseFloat(trade.quantity);
+        const sellValue = parseFloat(sellTrade.price) * parseFloat(sellTrade.quantity);
+        const profitLoss = sellValue - buyValue;
+        
+        // Update both trades with P&L
+        await query(`
+          UPDATE trades 
+          SET profit_loss = $1 
+          WHERE id = $2 OR id = $3
+        `, [profitLoss, trade.id, sellTrade.id]);
+        
+        // Update portfolio balance
+        await query(`
+          UPDATE portfolio 
+          SET balance = balance + $1,
+              profit_loss = profit_loss + $1
+          WHERE id = 1
+        `, [profitLoss]);
+        
+        return profitLoss;
+      }
+    }
+    
+    // For SELL trades, check if there's a matching BUY
+    if (trade.trade_type === 'SELL') {
+      const buyResult = await query(`
+        SELECT * FROM trades 
+        WHERE symbol = $1 
+        AND trade_type = 'BUY' 
+        AND created_at < $2
+        AND profit_loss IS NULL
+        ORDER BY created_at DESC
+        LIMIT 1
+      `, [trade.symbol, trade.created_at]);
+      
+      if (buyResult.rows.length > 0) {
+        const buyTrade = buyResult.rows[0];
+        
+        // Calculate P&L
+        const buyValue = parseFloat(buyTrade.price) * parseFloat(buyTrade.quantity);
+        const sellValue = parseFloat(trade.price) * parseFloat(trade.quantity);
+        const profitLoss = sellValue - buyValue;
+        
+        // Update both trades with P&L
+        await query(`
+          UPDATE trades 
+          SET profit_loss = $1 
+          WHERE id = $2 OR id = $3
+        `, [profitLoss, buyTrade.id, trade.id]);
+        
+        // Update portfolio balance
+        await query(`
+          UPDATE portfolio 
+          SET balance = balance + $1,
+              profit_loss = profit_loss + $1
+          WHERE id = 1
+        `, [profitLoss]);
+        
+        return profitLoss;
+      }
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Error calculating P&L:', error);
+    return null;
+  }
+}
+
+// Update the POST /trades endpoint to include this:
+router.post('/', async (req, res) => {
+  try {
+    const { 
+      symbol, 
+      trade_type,
+      price, 
+      quantity, 
+      confidence,
+      strategy,
+      mode,
+      enable_telegram
+    } = req.body;
+    
+    if (!symbol || !trade_type || !price || !quantity) {
+      return res.status(400).json({ 
+        success: false,
+        error: 'Missing required fields' 
+      });
+    }
+
+    if (mode === 'live' && !canTradeLive()) {
+      return res.status(400).json({
+        success: false,
+        error: 'Live trading not available. Binance API not configured.'
+      });
+    }
+    
+    const total_value = price * quantity;
+    let orderResult = null;
+    
+    // Execute on Binance if live mode
+    if (mode === 'live' && canTradeLive()) {
+      try {
+        const binanceSymbol = symbol.replace('/', '').toUpperCase();
+        console.log(`🔴 LIVE TRADE: ${trade_type} ${quantity} ${binanceSymbol} @ $${price}`);
+        
+        orderResult = await binance.placeOrder(
+          binanceSymbol,
+          trade_type.toUpperCase(),
+          quantity
+        );
+        
+        console.log('✅ Binance order executed:', orderResult);
+      } catch (binanceError) {
+        console.error('❌ Binance order failed:', binanceError);
+        return res.status(500).json({
+          success: false,
+          error: 'Failed to execute on Binance',
+          details: binanceError.message
+        });
+      }
+    } else {
+      console.log(`📄 PAPER TRADE: ${trade_type} ${quantity} ${symbol} @ $${price}`);
+    }
+    
+    // Deduct/Add from portfolio balance
+    if (trade_type === 'BUY') {
+      // Deduct money for buying
+      await query(`
+        UPDATE portfolio 
+        SET balance = balance - $1 
+        WHERE id = 1
+      `, [total_value]);
+    } else if (trade_type === 'SELL') {
+      // Add money for selling
+      await query(`
+        UPDATE portfolio 
+        SET balance = balance + $1 
+        WHERE id = 1
+      `, [total_value]);
+    }
+    
+    // Save to database
+    const result = await query(
+      `INSERT INTO trades 
+       (symbol, trade_type, price, quantity, total_value, confidence, strategy, mode)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
+       RETURNING *`,
+      [symbol, trade_type, price, quantity, total_value, confidence, strategy, mode]
+    );
+    
+    const savedTrade = result.rows[0];
+    
+    // Calculate P&L if this closes a position
+    const profitLoss = await calculateTradeProfitLoss(savedTrade);
+    
+    if (profitLoss !== null) {
+      console.log(`💰 Trade P&L: ${profitLoss > 0 ? '+' : ''}$${profitLoss.toFixed(2)}`);
+    }
+    
+    // Send Telegram notification if enabled
+    let telegramSent = false;
+    if (enable_telegram) {
+      try {
+        await notifications.sendTradeAlert({
+          ...savedTrade,
+          profit_loss: profitLoss,
+          mode: mode
+        });
+        telegramSent = true;
+        console.log('📱 Telegram notification sent');
+      } catch (telegramError) {
+        console.error('❌ Telegram notification failed:', telegramError);
+      }
+    }
+    
+    res.status(201).json({ 
+      success: true, 
+      trade: {
+        ...savedTrade,
+        profit_loss: profitLoss
+      },
+      binanceOrder: orderResult,
+      telegramSent: telegramSent,
+      mode: mode
+    });
+    
+  } catch (error) {
+    console.error('Error creating trade:', error);
+    res.status(500).json({ 
+      success: false,
+      error: error.message 
+    });
+  }
+});
+
 module.exports = router;
+
 
