@@ -22,6 +22,7 @@ const portfolioRouter = require('./routes/portfolio');
 const syncRouter = require('./routes/sync');
 const notificationsRouter = require('./routes/notifications');
 const advancedRouter = require('./routes/advanced');
+const advancedMLRouter = require('./routes/advancedML');
 
 // Use routes
 app.use('/api/trades', tradesRouter);
@@ -30,6 +31,7 @@ app.use('/api/portfolio', portfolioRouter);
 app.use('/api/sync', syncRouter);
 app.use('/api/notifications', notificationsRouter);
 app.use('/api/advanced', advancedRouter);
+app.use('/api/ml', advancedMLRouter);
 
 // Health check
 app.get('/health', (req, res) => {
@@ -190,4 +192,5 @@ app.listen(PORT, () => {
 });
 
 module.exports = app;
+
 
